@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generador de QR - Restaurante</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .qr-card {
+            background: white;
+            color: black;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .qr-card img { max-width: 100%; height: auto; }
+        .cut-line { border-top: 1px dashed #333; margin-top: 15px; width: 100%; }
+        @media print {
+            body { background: white; color: black; }
+            .no-print { display: none; }
+            .qr-card { border: 1px solid #ccc; box-shadow: none; break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header style="padding: 20px; text-align: center;" class="no-print">
+            <h1 style="color: var(--text-main)">🖨️ Generador de Mesas</h1>
+            <p>Define cuántas mesas tienes y genera los carteles listos para imprimir.</p>
+            <div style="margin: 20px 0;">
+                <input type="number" id="totalMesas" value="10" style="padding: 8px; border-radius: 5px; border: none;">
+                <button onclick="generarQRs()" class="btn-primary" style="width: auto;">Generar QRs</button>
+                <button onclick="window.print()" class="btn-primary" style="width: auto; background: var(--success); margin-left: 10px;">Imprimir</button>
+            </div>
+        </header>
+
+        <div id="qr-container" class="qr-grid">
+            </div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabase-client.js';
+
+        window.generarQRs = async () => {
+            const total = document.getElementById('totalMesas').value;
+            const container = document.getElementById('qr-container');
+            const baseUrl = window.location.origin; // Detecta si es localhost o vercel automáticamente
+            
+            // 1. Asegurar que las mesas existen en DB
+            const mesasArray = [];
+            for(let i=1; i<=total; i++) {
+                mesasArray.push({ numero_mesa: i });
+            }
+            // Upsert: Crea si no existe, no hace nada si ya existe
+            await supabase.from('mesas').upsert(mesasArray, { onConflict: 'numero_mesa' });
+
+            // 2. Renderizar visualmente
+            container.innerHTML = '';
+            for (let i = 1; i <= total; i++) {
+                // URL que abrirá el cliente (ej: tudominio.com/mesa/1)
+                const mesaUrl = `${baseUrl}/mesa/${i}`;
+                // API pública para generar imagen QR
+                const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(mesaUrl)}`;
+
+                container.innerHTML += `
+                    <div class="qr-card">
+                        <h2 style="margin:0 0 10px 0">MESA ${i}</h2>
+                        <img src="${qrImage}" alt="QR Mesa ${i}">
+                        <p style="font-size: 0.8em; margin-top: 10px;">Escanea para ordenar</p>
+                        <div class="cut-line"></div>
+                        <small>Sistema Web</small>
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+  </html>
+
