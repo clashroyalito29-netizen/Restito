@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Carga de Datos de Prueba</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .log-box {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 8px;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 600px; margin: 50px auto; text-align: center;">
+        <div class="glass-card">
+            <h2>🍔 Carga de Menú Inicial</h2>
+            <p>Este script borrará los datos actuales (si existen) y creará un menú demo profesional.</p>
+            <button onclick="runSeed()" class="btn-primary" id="btn-seed">
+                🚀 Inyectar Datos de Prueba
+            </button>
+        </div>
+
+        <div id="console" class="log-box">Esperando comando...</div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabase-client.js';
+
+        const log = (msg) => {
+            const c = document.getElementById('console');
+            c.innerHTML += `> ${msg}<br>`;
+            c.scrollTop = c.scrollHeight;
+        };
+
+        window.runSeed = async () => {
+            const btn = document.getElementById('btn-seed');
+            btn.disabled = true;
+            btn.innerText = "Procesando...";
+            
+            try {
+                log("Iniciando limpieza de base de datos...");
+                
+                // 1. Limpiar datos existentes (Orden inverso por claves foráneas)
+                await supabase.from('pedidos').delete().neq('id', 0);
+                await supabase.from('productos').delete().neq('id', 0);
+                await supabase.from('categorias').delete().neq('id', 0);
+                
+                log("✅ Base de datos limpia.");
+
+                // 2. Crear Categorías
+                log("Creando categorías...");
+                const { data: cats, error: catError } = await supabase.from('categorias').insert([
+                    { nombre: 'Hamburguesas', orden: 1 },
+                    { nombre: 'Acompañamientos', orden: 2 },
+                    { nombre: 'Bebidas', orden: 3 },
+                    { nombre: 'Postres', orden: 4 }
+                ]).select();
+
+                if (catError) throw catError;
+
+                // Mapear IDs (porque Supabase genera IDs nuevos)
+                const catMap = {};
+                cats.forEach(c => catMap[c.nombre] = c.id);
+                log(`✅ ${cats.length} Categorías creadas.`);
+
+                // 3. Crear Productos
+                log("Creando productos...");
+                const productos = [
+                    // Hamburguesas
+                    {
+                        nombre: "Doble Bacon Cheese",
+                        descripcion: "Doble carne smasheada, cheddar fundido, panceta crujiente y salsa de la casa.",
+                        precio: 8500,
+                        categoria_id: catMap['Hamburguesas'],
+                        recomendado: true,
+                        stock: 50
+                    },
+                    {
+                        nombre: "Royal Deluxe",
+                        descripcion: "Carne 180g, lechuga, tomate, cebolla morada y pepinillos.",
+                        precio: 7200,
+                        categoria_id: catMap['Hamburguesas'],
+                        recomendado: false,
+                        stock: 50
+                    },
+                    // Acompañamientos
+                    {
+                        nombre: "Papas Rústicas",
+                        descripcion: "Papas con piel fritas a la perfección con dip de ajo.",
+                        precio: 4500,
+                        categoria_id: catMap['Acompañamientos'],
+                        recomendado: true,
+                        stock: 100
+                    },
+                    {
+                        nombre: "Aros de Cebolla",
+                        descripcion: "Crujientes aros rebozados en cerveza.",
+                        precio: 3800,
+                        categoria_id: catMap['Acompañamientos'],
+                        recomendado: false,
+                        stock: 80
+                    },
+                    // Bebidas
+                    {
+                        nombre: "Coca-Cola 500ml",
+                        descripcion: "Bien fría.",
+                        precio: 2500,
+                        categoria_id: catMap['Bebidas'],
+                        recomendado: false,
+                        stock: 200
+                    },
+                    {
+                        nombre: "Cerveza Artesanal IPA",
+                        descripcion: "Pinta de cerveza tirada local.",
+                        precio: 5000,
+                        categoria_id: catMap['Bebidas'],
+                        recomendado: true,
+                        stock: 40
+                    }
+                ];
+
+                const { error: prodError } = await supabase.from('productos').insert(productos);
+                if (prodError) throw prodError;
+
+                log("✅ Productos creados exitosamente.");
+                log("🎉 ¡PROCESO TERMINADO! Ya puedes abrir el menú.");
+                
+                btn.style.backgroundColor = "var(--success)";
+                btn.innerText = "¡Datos Cargados!";
+
+            } catch (error) {
+                console.error(error);
+                log(`❌ ERROR: ${error.message}`);
+                btn.disabled = false;
+                btn.innerText = "Reintentar";
+            }
+        };
+    </script>
+</body>
+</html>
+
