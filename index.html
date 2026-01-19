@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menú Digital</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="container" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div id="lock-screen" class="glass-card animate-enter" style="text-align: center; margin-top: 50px;">
+            <h2>🔒 Mesa Cerrada</h2>
+            <p style="color: var(--text-muted)">Por favor, solicita a un mesero que habilite tu mesa para comenzar a ordenar.</p>
+        </div>
+
+        <div id="menu-interface" style="display: none;">
+            <header class="glass-card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin:0">Mesa #<span id="mesa-display"></span></h3>
+                <span style="font-size: 0.8rem; color: var(--success)">● Conectado</span>
+            </header>
+
+            <div id="categories" style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 15px;">
+                </div>
+
+            <div id="products" class="product-grid">
+                </div>
+            
+            <button onclick="enviarPedido()" class="btn-primary glass-card" style="position: fixed; bottom: 20px; left: 5%; width: 90%; z-index: 100;">
+                Ver Carrito / Pagar
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabase-client.js';
+
+        // 1. Detectar Mesa desde URL
+        const pathSegments = window.location.pathname.split('/');
+        // Asumimos formato /mesa/1, si no, busca parámetro ?id=1 para desarrollo local
+        const urlParams = new URLSearchParams(window.location.search);
+        let mesaId = pathSegments[pathSegments.length - 1] || urlParams.get('id');
+        
+        // Simulación para desarrollo si no hay ID
+        if(!mesaId || isNaN(mesaId)) mesaId = 1; 
+
+        document.getElementById('mesa-display').innerText = mesaId;
+
+        // 2. Verificar Estado de Mesa (Anti-spam)
+        async function checkMesaStatus() {
+            const { data, error } = await supabase
+                .from('mesas')
+                .select('estado, id')
+                .eq('numero_mesa', mesaId)
+                .single();
+
+            if (data && data.estado === 'OCUPADA') {
+                document.getElementById('lock-screen').style.display = 'none';
+                document.getElementById('menu-interface').style.display = 'block';
+                document.getElementById('menu-interface').classList.add('animate-enter');
+                loadMenu();
+                listenToTableStatus(data.id); // Escuchar si el admin cierra la mesa
+            } else {
+                document.getElementById('lock-screen').style.display = 'block';
+                document.getElementById('menu-interface').style.display = 'none';
+                // Escuchar cambios para abrir automáticamente cuando el mozo active
+                listenToTableStatus(null, true);
+            }
+        }
+
+        // 3. Realtime: Si el mozo abre la mesa, la app se desbloquea sola
+        function listenToTableStatus(dbId, isWaiting = false) {
+            supabase.channel('mesa-status')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mesas', filter: `numero_mesa=eq.${mesaId}` }, 
+            (payload) => {
+                if(payload.new.estado === 'OCUPADA') window.location.reload();
+                if(payload.new.estado === 'LIBRE') window.location.reload();
+            })
+            .subscribe();
+        }
+
+        // 4. Cargar Productos
+        async function loadMenu() {
+            const { data: cats } = await supabase.from('categorias').select('*').order('orden');
+            const { data: prods } = await supabase.from('productos').select('*');
+            
+            const catContainer = document.getElementById('categories');
+            cats.forEach(c => {
+                catContainer.innerHTML += `<div class="category-pill">${c.nombre}</div>`;
+            });
+
+            const prodContainer = document.getElementById('products');
+            prods.forEach(p => {
+                prodContainer.innerHTML += `
+                    <div class="glass-card animate-enter">
+                        <div style="height: 100px; background: #333; border-radius: 8px; margin-bottom: 10px;"></div>
+                        <h4 style="margin: 5px 0">${p.nombre}</h4>
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <span style="color: var(--accent); font-weight:bold">$${p.precio}</span>
+                            <button style="background:var(--text-main); color:black; border:none; border-radius:50%; width:25px; height:25px">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Iniciar
+        checkMesaStatus();
+
+        // Función global placeholder para el botón
+        window.enviarPedido = () => alert("Aquí abriría el modal del carrito");
+    </script>
+</body>
+</html>
