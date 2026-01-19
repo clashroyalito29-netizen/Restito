@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/mesa/:id", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/admin.html" }
+  ]
+}
+
